@@ -148,10 +148,11 @@
 
     let pipeline;
     try {
-      pipeline = await window.transformers.pipeline('feature-extraction', {
+ const pipeline = await window.transformers.pipeline('feature-extraction', {
   modelPath: 'https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/',
   progress_callback: (status) => console.log('Loading:', status)
 });
+
 
 
     } catch (err) {
