@@ -149,10 +149,10 @@
     let pipeline;
     try {
       pipeline = await window.transformers.pipeline('feature-extraction', {
-        model: 'Xenova/all-MiniLM-L6-v2',
-        // Optional: host model files externally and use modelPath
-        // modelPath: 'https://your-hosted-model-path/'
-      });
+  model: 'Xenova/all-MiniLM-L6-v2',
+  progress_callback: (status) => console.log('Loading:', status)
+});
+
     } catch (err) {
       displayMessage('bot', 'Error loading embedding model. Please check model availability.');
       return;
