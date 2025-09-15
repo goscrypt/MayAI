@@ -149,9 +149,10 @@
     let pipeline;
     try {
       pipeline = await window.transformers.pipeline('feature-extraction', {
-        modelPath: 'https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/',
-        progress_callback: (status) => console.log('Loading:', status)
-      });
+  model: 'Xenova/all-MiniLM-L6-v2',
+  quantized: true
+});
+
     } catch (err) {
       displayMessage('bot', 'Error loading embedding model. Please check model availability.');
       return;
@@ -229,9 +230,10 @@
       let pipeline;
       try {
         pipeline = await window.transformers.pipeline('feature-extraction', {
-          modelPath: 'https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/',
-          progress_callback: (status) => console.log('Loading:', status)
-        });
+  model: 'Xenova/all-MiniLM-L6-v2',
+  quantized: true
+});
+
       } catch (err) {
         displayMessage('bot', 'Error loading embedding model.');
         return;
