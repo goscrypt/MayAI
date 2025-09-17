@@ -110,54 +110,61 @@
             }
         });
 
-        async function sendMessage() {
-            if (!chat) {
-                await initModel();
-            }
+async function sendMessage() {
+    if (!chat) {
+        await initModel();
+    }
 
-            const input = userInput.value.trim();
-            if (!input) return;
+    const input = userInput.value.trim();
+    if (!input) return;
 
-            // Display user message immediately and clear input
-            chatLog.textContent += `You: ${input}\n`;
-            userInput.value = '';
+    // Display user message immediately and clear input
+    chatLog.textContent += `You: ${input}\n`;
+    userInput.value = '';
 
-            // Show a "typing" indicator
-            statusMessage.textContent = "🤖 Bot is typing...";
-            sendBtn.disabled = true;
+    // --- NEW PROMPT LOGIC ---
+    // Instead of sending the entire file, we'll try to get the most relevant
+    // part of the text. For a simple text file, we can take a snippet.
+    const relevantContext = fileContext.substring(0, 1000); // Limit to 1000 chars
 
-            const prompt = `You are a helpful assistant. Use the following context to answer the user's question.\n\nContext:\n${fileContext}\n\nUser: ${input}\nAssistant:`;
+    // The new prompt is much more direct and tries to enforce a concise answer.
+    const prompt = `Answer this question: "${input}" using the following text: "${relevantContext}"`;
+    // We've also removed the "User: ... Assistant:" pattern, which can cause repetition.
 
-            try {
-                const response = await chat(prompt, {
-                    max_new_tokens: 200,
-                    return_full_text: false,
-                });
+    // Show a "typing" indicator
+    statusMessage.textContent = "🤖 Bot is typing...";
+    sendBtn.disabled = true;
 
-                let reply = response[0].generated_text.trim();
+    try {
+        const response = await chat(prompt, {
+            max_new_tokens: 150, // Slightly reduced to encourage shorter answers
+            return_full_text: false,
+        });
 
-                // --- NEW CODE START ---
-                // The model sometimes repeats the prompt, so we clean it up.
-                const assistantIndex = reply.lastIndexOf('Assistant:');
-                if (assistantIndex !== -1) {
-                    reply = reply.substring(assistantIndex + 'Assistant:'.length).trim();
-                }
+        let reply = response[0].generated_text.trim();
 
-                // A more robust way to clean the output
-                const cleanRegex = /(User:|Assistant:|Linking:|\n)+/g;
-                reply = reply.replace(cleanRegex, '').trim();
-
-                // --- NEW CODE END ---
-
-                chatLog.textContent += `Bot: ${reply}\n\n`;
-                chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
-            } catch (error) {
-                chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
-            } finally {
-                statusMessage.textContent = "✅ Ready for your next question!";
-                sendBtn.disabled = false;
-            }
+        // The model can still repeat the prompt, so we will still clean it up.
+        // The lastIndexOf method is great for this.
+        const promptIndex = reply.lastIndexOf(`Answer this question:`);
+        if (promptIndex !== -1) {
+            reply = reply.substring(promptIndex).trim();
+            // Now, we'll remove the part of the prompt that was repeated
+            reply = reply.replace(`Answer this question: "${input}" using the following text: "${relevantContext}"`, '').trim();
         }
+
+        // Final cleanup for any leftover artifacts
+        const cleanRegex = /(User:|Assistant:|Linking:|\n)+/g;
+        reply = reply.replace(cleanRegex, '').trim();
+
+        chatLog.textContent += `Bot: ${reply}\n\n`;
+        chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
+    } catch (error) {
+        chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
+    } finally {
+        statusMessage.textContent = "✅ Ready for your next question!";
+        sendBtn.disabled = false;
+    }
+}
 
         sendBtn.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (event) => {
