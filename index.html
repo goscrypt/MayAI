@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Chatbot with File Context</title>
+    <title>AI Chatbot with File Context</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -92,6 +92,7 @@
 
         async function initModel() {
             statusMessage.textContent = "⌛ Loading AI model...";
+            sendBtn.disabled = true;
             chat = await pipeline('text-generation', 'Xenova/distilgpt2');
             statusMessage.textContent = "✅ Model loaded successfully. You can now chat!";
             sendBtn.disabled = false;
@@ -101,14 +102,19 @@
             const file = event.target.files[0];
             if (file) {
                 const text = await file.text();
-                // A better approach would be to chunk the file, but for a simple demo,
-                // this gets you started.
+                // For a more powerful app, you might want to chunk the file to fit
+                // within the model's token limit, but for this example, we'll
+                // use the entire text.
                 fileContext = text;
                 chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
             }
         });
 
         async function sendMessage() {
+            if (!chat) {
+                await initModel();
+            }
+
             const input = userInput.value.trim();
             if (!input) return;
 
@@ -120,21 +126,30 @@
             statusMessage.textContent = "🤖 Bot is typing...";
             sendBtn.disabled = true;
 
-            const prompt = `You are a helpful assistant. Use the following context to answer the user's question. Context: ${fileContext}\n\nUser: ${input}\nAssistant:`;
+            const prompt = `You are a helpful assistant. Use the following context to answer the user's question.\n\nContext:\n${fileContext}\n\nUser: ${input}\nAssistant:`;
 
             try {
                 const response = await chat(prompt, {
-                    max_new_tokens: 100,
+                    max_new_tokens: 200,
                     return_full_text: false,
-                    stop_sequence: ['User:', 'Assistant:', '\n']
                 });
 
-                const reply = response[0].generated_text.trim();
-                const lines = reply.split('\n');
-                const uniqueLines = [...new Set(lines)];
-                const cleanedReply = uniqueLines.join('\n');
+                let reply = response[0].generated_text.trim();
 
-                chatLog.textContent += `Bot: ${cleanedReply}\n\n`;
+                // --- NEW CODE START ---
+                // The model sometimes repeats the prompt, so we clean it up.
+                const assistantIndex = reply.lastIndexOf('Assistant:');
+                if (assistantIndex !== -1) {
+                    reply = reply.substring(assistantIndex + 'Assistant:'.length).trim();
+                }
+
+                // A more robust way to clean the output
+                const cleanRegex = /(User:|Assistant:|Linking:|\n)+/g;
+                reply = reply.replace(cleanRegex, '').trim();
+
+                // --- NEW CODE END ---
+
+                chatLog.textContent += `Bot: ${reply}\n\n`;
                 chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
             } catch (error) {
                 chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
