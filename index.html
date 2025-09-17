@@ -48,7 +48,7 @@
       const file = event.target.files[0];
       if (file) {
         const text = await file.text();
-        fileContext = text.slice(0, 1000);
+        fileContext = text.slice(0, 1000); // Limit for performance
         document.getElementById('chatLog').textContent += `📄 File loaded: ${file.name}\n\n`;
       }
     });
@@ -61,10 +61,11 @@
       const input = document.getElementById('userInput').value.trim();
       if (!input) return;
 
-      const prompt = `${fileContext}\n\nUser: ${input}\nBot:`;
+      const prompt = `Context:\n${fileContext}\n\nConversation:\nUser: ${input}\nBot:`;
       const response = await chat(prompt, {
         max_new_tokens: 100,
-        return_full_text: false
+        return_full_text: false,
+        stop_sequence: ['User:', 'Bot:']
       });
 
       const reply = response[0].generated_text.trim();
@@ -72,8 +73,7 @@
       document.getElementById('userInput').value = '';
     });
 
-    // Optional: preload model
-    initModel();
+    window.onload = initModel;
   </script>
 </body>
 </html>
