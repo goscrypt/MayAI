@@ -53,7 +53,7 @@
       }
     });
 
-    document.getElementById('sendBtn').addEventListener('click', async () => {
+    async function sendMessage() {
       if (!chat) {
         await initModel();
       }
@@ -61,18 +61,24 @@
       const input = document.getElementById('userInput').value.trim();
       if (!input) return;
 
-      const prompt = `Context:\n${fileContext}\n\nConversation:\nUser: ${input}\nBot:`;
+      const prompt = `You are a helpful assistant. Use the following context to answer the user's question.\n\nContext:\n${fileContext}\n\nUser: ${input}\nAssistant:`;
+
       const response = await chat(prompt, {
         max_new_tokens: 100,
         return_full_text: false,
-        stop_sequence: ['User:', 'Bot:']
+        stop_sequence: ['User:', 'Assistant:', '\n']
       });
 
       const reply = response[0].generated_text.trim();
-      document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${reply}\n\n`;
-      document.getElementById('userInput').value = '';
-    });
+      const lines = reply.split('\n');
+      const uniqueLines = [...new Set(lines)];
+      const cleanedReply = uniqueLines.join('\n');
 
+      document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${cleanedReply}\n\n`;
+      document.getElementById('userInput').value = '';
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
     window.onload = initModel;
   </script>
 </body>
