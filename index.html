@@ -65,36 +65,11 @@
             color: #555;
             margin-top: 10px;
         }
-        .model-selector {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-            justify-content: center;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>📄 AI Chatbot with File Context</h2>
-        <div class="model-selector">
-            <label for="modelSelect">Select a Model:</label>
-         <select id="modelSelect">
-  <option value="distilbert-base-uncased-distilled-squad">
-    Question Answering (Recommended)
-  </option>
-  <option value="Salesforce/codegen-350M-mono">
-    Code Generation (codegen-350M)
-  </option>
-  <option value="distilgpt2">
-    Text Generation
-  </option>
-  <option value="all-MiniLM-L6-v2">
-    Sentence Embeddings
-  </option>
-</select>
-
-
-        </div>
         <input type="file" id="fileInput" accept=".txt, .md, .csv">
         <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
         <div class="input-group">
@@ -107,65 +82,22 @@
     <script type="module">
         import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
-        let activePipeline;
+        let questionAnswerer;
         let fileContext = '';
         const chatLog = document.getElementById('chatLog');
         const fileInput = document.getElementById('fileInput');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const statusMessage = document.getElementById('statusMessage');
-        const modelSelect = document.getElementById('modelSelect');
 
-      async function initModel(modelName) {
-  statusMessage.textContent = `⌛ Loading ${modelName} model…`;
-  sendBtn.disabled = true;
-
-  let modelId, task;
-
-  if (modelName === 'distilgpt2') {
-    // Use Xenova’s hosted distilgpt2
-    modelId = 'Xenova/distilgpt2';
-    task    = 'text-generation';
-  }
-  else if (modelName.includes('/')) {
-    // Full Hugging Face ID passed in (e.g. Salesforce/codegen-350M-mono)
-    modelId = modelName;
-    task = modelName.includes('squad')
-      ? 'question-answering'
-      : modelName.includes('codegen')
-        ? 'text-generation'
-        : 'feature-extraction';
-  }
-  else {
-    // Fallback for other Xenova-hosted models
-    modelId = `Xenova/${modelName}`;
-    task = modelName.includes('squad')
-      ? 'question-answering'
-      : modelName.includes('codegen')
-        ? 'text-generation'
-        : 'feature-extraction';
-  }
-
-  console.log(`Attempting to load: ${modelId} as ${task}`);
-  try {
-    activePipeline = await pipeline(task, modelId);
-    statusMessage.textContent = `✅ Model ${modelName} loaded successfully.`;
-  } catch (err) {
-    statusMessage.textContent = `❌ Failed to load model: ${err.message}`;
-    console.error(err);
-  }
-  sendBtn.disabled = false;
-}
-
-
-
-        // Initialize the default model on page load
-        initModel(modelSelect.value);
-
-        // Re-initialize the model when a new one is selected
-        modelSelect.addEventListener('change', (event) => {
-            initModel(event.target.value);
-        });
+        async function initModel() {
+            statusMessage.textContent = "⌛ Loading Question-Answering model...";
+            sendBtn.disabled = true;
+            // Load a model specifically for the question-answering task
+            questionAnswerer = await pipeline('question-answering', 'Xenova/distilbert-base-uncased-distilled-squad');
+            statusMessage.textContent = "✅ Model loaded successfully. You can now chat!";
+            sendBtn.disabled = false;
+        }
 
         fileInput.addEventListener('change', async (event) => {
             const file = event.target.files[0];
@@ -177,60 +109,29 @@
         });
 
         async function sendMessage() {
-            if (!activePipeline) {
-                return;
+            if (!questionAnswerer) {
+                await initModel();
             }
 
             const input = userInput.value.trim();
             if (!input) return;
 
+            // Display user message immediately and clear input
             chatLog.textContent += `You: ${input}\n`;
             userInput.value = '';
 
+            // Show a "typing" indicator
             statusMessage.textContent = "🤖 Bot is thinking...";
             sendBtn.disabled = true;
 
             try {
-                let reply;
-                const task = activePipeline.task;
-
-                if (task === 'question-answering') {
-                    const response = await activePipeline(input, fileContext);
-                    reply = response.answer;
-                } else if (task === 'text-generation') {
-                    const prompt = `Based on the following text: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
-                    const response = await activePipeline(prompt, { max_new_tokens: 100, return_full_text: false });
-                    reply = response[0].generated_text;
-                    
-                    const cleanRegex = /(Based on the following text:.*answer the question:.*)/g;
-                    reply = reply.replace(cleanRegex, '').trim();
-
-                } else if (task === 'feature-extraction') {
-                    const sentences = fileContext.split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s/);
-                    const queryEmbedding = await activePipeline(input, { pooling: 'mean', normalize: true });
-                    const sentenceEmbeddings = await activePipeline(sentences, { pooling: 'mean', normalize: true });
-
-                    const cosineSimilarity = (a, b) => {
-                        const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
-                        const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-                        const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-                        return dotProduct / (magnitudeA * magnitudeB);
-                    };
-
-                    let maxSimilarity = -1;
-                    let mostRelevantSentence = 'No relevant information found.';
-                    for (let i = 0; i < sentences.length; i++) {
-                        const similarity = cosineSimilarity(queryEmbedding.data, sentenceEmbeddings.data[i]);
-                        if (similarity > maxSimilarity) {
-                            maxSimilarity = similarity;
-                            mostRelevantSentence = sentences[i];
-                        }
-                    }
-                    reply = mostRelevantSentence;
-                }
+                // The question-answering model takes a question and a context directly.
+                const response = await questionAnswerer(input, fileContext);
+                
+                let reply = response.answer;
                 
                 chatLog.textContent += `Bot: ${reply}\n\n`;
-                chatLog.scrollTop = chatLog.scrollHeight;
+                chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
             } catch (error) {
                 chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
             } finally {
@@ -246,9 +147,7 @@
             }
         });
 
-        window.onload = () => {
-          initModel(modelSelect.value);
-        };
+        window.onload = initModel;
     </script>
 </body>
 </html>
