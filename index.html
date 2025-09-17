@@ -113,24 +113,23 @@
             let modelId = modelName;
             let task;
 
-            if (modelName.includes('squad')) {
-                task = 'question-answering';
-                modelId = `Xenova/${modelName}`;
-            } else if (modelName.includes('codegen')) {
-                task = 'text-generation';
-                modelId = `Xenova/${modelName}`;
-            } else if (modelName.includes('distilgpt2')) {
+            if (modelName === 'distilgpt2') {
                 task = 'text-generation';
             } else {
-                task = 'feature-extraction';
+                task = modelName.includes('squad') ? 'question-answering' : 
+                       modelName.includes('codegen') ? 'text-generation' : 
+                       'feature-extraction';
                 modelId = `Xenova/${modelName}`;
             }
 
-            // Log the model ID to see if it's correct
-            console.log(`Loading model from: ${modelId}`);
-            
-            activePipeline = await pipeline(task, modelId);
-            statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
+            console.log(`Attempting to load: ${modelId}`);
+
+            try {
+                activePipeline = await pipeline(task, modelId);
+                statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
+            } catch (error) {
+                statusMessage.textContent = `❌ Failed to load model: ${error.message}`;
+            }
             sendBtn.disabled = false;
         }
 
@@ -173,7 +172,6 @@
                     const response = await activePipeline(input, fileContext);
                     reply = response.answer;
                 } else if (task === 'text-generation') {
-                    // For code generation and general text generation, the prompt is key.
                     const prompt = `Based on the following text: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
                     const response = await activePipeline(prompt, { max_new_tokens: 100, return_full_text: false });
                     reply = response[0].generated_text;
