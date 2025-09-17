@@ -35,38 +35,44 @@
   <button onclick="sendMessage()">Send</button>
 
   <script>
-    let chat;
-    let fileContext = '';
+  let chat;
+  let fileContext = '';
 
-    async function initModel() {
-      chat = await window.transformers.pipeline('text-generation', 'Xenova/distilgpt2');
-      document.getElementById('chatLog').textContent += "✅ Model loaded successfully.\n\n";
+  async function initModel() {
+    chat = await window.transformers.pipeline('text-generation', 'Xenova/distilgpt2');
+    document.getElementById('chatLog').textContent += "✅ Model loaded successfully.\n\n";
+  }
+
+  document.getElementById('fileInput').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const text = await file.text();
+      fileContext = text.slice(0, 1000); // Limit for performance
+      document.getElementById('chatLog').textContent += `📄 File loaded: ${file.name}\n\n`;
+    }
+  });
+
+  async function sendMessage() {
+    if (!chat) {
+      await initModel();
     }
 
-    document.getElementById('fileInput').addEventListener('change', async (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const text = await file.text();
-        fileContext = text.slice(0, 1000); // Limit for performance
-        document.getElementById('chatLog').textContent += `📄 File loaded: ${file.name}\n\n`;
-      }
+    const input = document.getElementById('userInput').value.trim();
+    if (!input) return;
+
+    const prompt = `${fileContext}\n\nUser: ${input}\nBot:`;
+    const response = await chat(prompt, {
+      max_new_tokens: 100,
+      return_full_text: false // ✅ Prevents echoing the prompt
     });
 
-    async function sendMessage() {
-      if (!chat) {
-        await initModel();
-      }
-      const input = document.getElementById('userInput').value.trim();
-      if (!input) return;
+    const reply = response[0].generated_text.trim();
+    document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${reply}\n\n`;
+    document.getElementById('userInput').value = '';
+  }
 
-      const prompt = `${fileContext}\n\nUser: ${input}\nBot:`;
-      const response = await chat(prompt, { max_new_tokens: 100 });
-      document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${response[0].generated_text.trim()}\n\n`;
-      document.getElementById('userInput').value = '';
-    }
+  window.onload = initModel;
+</script>
 
-    // Load model on page load
-    window.onload = initModel;
-  </script>
 </body>
 </html>
