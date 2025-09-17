@@ -94,128 +94,128 @@
         <div id="statusMessage" class="loading-message"></div>
     </div>
 
-   <script type="module">
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
+    <script type="module">
+        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
-    let activePipeline;
-    let fileContext = '';
-    const chatLog = document.getElementById('chatLog');
-    const fileInput = document.getElementById('fileInput');
-    const userInput = document.getElementById('userInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const statusMessage = document.getElementById('statusMessage');
-    const modelSelect = document.getElementById('modelSelect');
+        let activePipeline;
+        let fileContext = '';
+        const chatLog = document.getElementById('chatLog');
+        const fileInput = document.getElementById('fileInput');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const modelSelect = document.getElementById('modelSelect');
 
-    async function initModel(modelName) {
-        statusMessage.textContent = `⌛ Loading ${modelName} model...`;
-        sendBtn.disabled = true;
+        async function initModel(modelName) {
+            statusMessage.textContent = `⌛ Loading ${modelName} model...`;
+            sendBtn.disabled = true;
 
-        const task = modelName.includes('squad') ? 'question-answering' : 
-                     modelName.includes('codegen') ? 'text-generation' : 
-                     modelName.includes('distilgpt2') ? 'text-generation' :
-                     'feature-extraction';
+            const task = modelName.includes('squad') ? 'question-answering' : 
+                         modelName.includes('codegen') ? 'text-generation' : 
+                         modelName.includes('distilgpt2') ? 'text-generation' :
+                         'feature-extraction';
 
-        activePipeline = await pipeline(task, modelName);
-        statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
-        sendBtn.disabled = false;
-    }
-
-    // Initialize the default model on page load
-    initModel(modelSelect.value);
-
-    // Re-initialize the model when a new one is selected
-    modelSelect.addEventListener('change', (event) => {
-        initModel(event.target.value);
-    });
-
-    fileInput.addEventListener('change', async (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const text = await file.text();
-            fileContext = text;
-            chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
-        }
-    });
-
-    async function sendMessage() {
-        if (!activePipeline) {
-            return;
-        }
-
-        const input = userInput.value.trim();
-        if (!input) return;
-
-        // Display user message immediately and clear input
-        chatLog.textContent += `You: ${input}\n`;
-        userInput.value = '';
-
-        // Show a "thinking" indicator
-        statusMessage.textContent = "🤖 Bot is thinking...";
-        sendBtn.disabled = true;
-
-        try {
-            let reply;
-            const modelName = modelSelect.value;
-            const task = activePipeline.task;
-
-            if (task === 'question-answering') {
-                const response = await activePipeline(input, fileContext);
-                reply = response.answer;
-            } else if (task === 'text-generation') {
-                // For code generation and general text generation, the prompt is key.
-                const prompt = `Based on the following context: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
-                const response = await activePipeline(prompt, { max_new_tokens: 100, return_full_text: false });
-                reply = response[0].generated_text;
-                
-                // Simple cleanup for the text generation model
-                const cleanRegex = /(Based on the following context:.*answer the question:.*)/g;
-                reply = reply.replace(cleanRegex, '').trim();
-
-            } else if (task === 'feature-extraction') {
-                // This model doesn't generate text, but we can use it to find the most relevant sentence.
-                const sentences = fileContext.split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s/);
-                const queryEmbedding = await activePipeline(input, { pooling: 'mean', normalize: true });
-                const sentenceEmbeddings = await activePipeline(sentences, { pooling: 'mean', normalize: true });
-
-                const cosineSimilarity = (a, b) => {
-                    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
-                    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-                    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-                    return dotProduct / (magnitudeA * magnitudeB);
-                };
-
-                let maxSimilarity = -1;
-                let mostRelevantSentence = 'No relevant information found.';
-                for (let i = 0; i < sentences.length; i++) {
-                    const similarity = cosineSimilarity(queryEmbedding.data, sentenceEmbeddings.data[i]);
-                    if (similarity > maxSimilarity) {
-                        maxSimilarity = similarity;
-                        mostRelevantSentence = sentences[i];
-                    }
-                }
-                reply = mostRelevantSentence;
-            }
-            
-            chatLog.textContent += `Bot: ${reply}\n\n`;
-            chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
-        } catch (error) {
-            chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
-        } finally {
-            statusMessage.textContent = "✅ Ready for your next question!";
+            activePipeline = await pipeline(task, modelName);
+            statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
             sendBtn.disabled = false;
         }
-    }
 
-    sendBtn.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') {
-            sendMessage();
+        // Initialize the default model on page load
+        initModel(modelSelect.value);
+
+        // Re-initialize the model when a new one is selected
+        modelSelect.addEventListener('change', (event) => {
+            initModel(event.target.value);
+        });
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const text = await file.text();
+                fileContext = text;
+                chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
+            }
+        });
+
+        async function sendMessage() {
+            if (!activePipeline) {
+                return;
+            }
+
+            const input = userInput.value.trim();
+            if (!input) return;
+
+            // Display user message immediately and clear input
+            chatLog.textContent += `You: ${input}\n`;
+            userInput.value = '';
+
+            // Show a "thinking" indicator
+            statusMessage.textContent = "🤖 Bot is thinking...";
+            sendBtn.disabled = true;
+
+            try {
+                let reply;
+                const modelName = modelSelect.value;
+                const task = activePipeline.task;
+
+                if (task === 'question-answering') {
+                    const response = await activePipeline(input, fileContext);
+                    reply = response.answer;
+                } else if (task === 'text-generation') {
+                    // For code generation and general text generation, the prompt is key.
+                    const prompt = `Based on the following context: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
+                    const response = await activePipeline(prompt, { max_new_tokens: 100, return_full_text: false });
+                    reply = response[0].generated_text;
+                    
+                    // Simple cleanup for the text generation model
+                    const cleanRegex = /(Based on the following context:.*answer the question:.*)/g;
+                    reply = reply.replace(cleanRegex, '').trim();
+
+                } else if (task === 'feature-extraction') {
+                    // This model doesn't generate text, but we can use it to find the most relevant sentence.
+                    const sentences = fileContext.split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s/);
+                    const queryEmbedding = await activePipeline(input, { pooling: 'mean', normalize: true });
+                    const sentenceEmbeddings = await activePipeline(sentences, { pooling: 'mean', normalize: true });
+
+                    const cosineSimilarity = (a, b) => {
+                        const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+                        const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+                        const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+                        return dotProduct / (magnitudeA * magnitudeB);
+                    };
+
+                    let maxSimilarity = -1;
+                    let mostRelevantSentence = 'No relevant information found.';
+                    for (let i = 0; i < sentences.length; i++) {
+                        const similarity = cosineSimilarity(queryEmbedding.data, sentenceEmbeddings.data[i]);
+                        if (similarity > maxSimilarity) {
+                            maxSimilarity = similarity;
+                            mostRelevantSentence = sentences[i];
+                        }
+                    }
+                    reply = mostRelevantSentence;
+                }
+                
+                chatLog.textContent += `Bot: ${reply}\n\n`;
+                chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
+            } catch (error) {
+                chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
+            } finally {
+                statusMessage.textContent = "✅ Ready for your next question!";
+                sendBtn.disabled = false;
+            }
         }
-    });
 
-    window.onload = () => {
-      initModel(modelSelect.value);
-    };
-</script>
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        window.onload = () => {
+          initModel(modelSelect.value);
+        };
+    </script>
 </body>
 </html>
