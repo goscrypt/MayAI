@@ -1,174 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Intelligent AI Chatbot</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            max-width: 600px;
-            margin: auto;
-            background-color: #f0f2f5;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        h2 {
-            color: #333;
-            text-align: center;
-        }
-        #chatLog {
-            width: 100%;
-            height: 300px;
-            margin-top: 10px;
-            padding: 10px;
-            font-family: monospace;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            resize: none;
-            box-sizing: border-box;
-            background-color: #fafafa;
-        }
-        .input-group {
-            display: flex;
-            margin-top: 10px;
-        }
-        #userInput {
-            flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        #sendBtn {
-            padding: 10px 20px;
-            margin-left: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        #sendBtn:hover {
-            background-color: #0056b3;
-        }
-        #fileInput {
-            width: 100%;
-            margin-top: 10px;
-        }
-        .loading-message {
-            text-align: center;
-            color: #555;
-            margin-top: 10px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Intelligent AI Chatbot</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      background-color: #f0f2f5;
+    }
+    .container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    h2 {
+      color: #333;
+      text-align: center;
+    }
+    #chatLog {
+      width: 100%;
+      height: 300px;
+      margin-top: 10px;
+      padding: 10px;
+      font-family: monospace;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #fafafa;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .input-group {
+      display: flex;
+      margin-top: 10px;
+    }
+    #userInput {
+      flex-grow: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #sendBtn {
+      padding: 10px 20px;
+      margin-left: 10px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    #sendBtn:hover {
+      background-color: #0056b3;
+    }
+    #fileInput {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .loading-message {
+      text-align: center;
+      color: #555;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2>📄 Intelligent AI Chatbot</h2>
-        <input type="file" id="fileInput" accept=".txt, .md, .csv">
-        <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
-        <div class="input-group">
-            <input type="text" id="userInput" placeholder="Ask your question...">
-            <button id="sendBtn">Send</button>
-        </div>
-        <div id="statusMessage" class="loading-message"></div>
+  <div class="container">
+    <h2>📄 Intelligent AI Chatbot</h2>
+    <input type="file" id="fileInput" accept=".txt,.md,.csv"><br>
+    <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
+    <div class="input-group">
+      <input type="text" id="userInput" placeholder="Ask a question or request code…">
+      <button id="sendBtn">Send</button>
     </div>
+    <div id="statusMessage" class="loading-message"></div>
+  </div>
 
-    <script type="module">
-        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
-        let qaPipeline;
-        let codeGenPipeline;
-        let fileContext = '';
+    let qaPipeline, codegenPipeline;
+    let fileContext = '';
+    const chatLog = document.getElementById('chatLog');
+    const fileInput = document.getElementById('fileInput');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const statusMessage = document.getElementById('statusMessage');
 
-        const chatLog = document.getElementById('chatLog');
-        const fileInput = document.getElementById('fileInput');
-        const userInput = document.getElementById('userInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const statusMessage = document.getElementById('statusMessage');
+    // Initialize both pipelines in parallel
+    async function initModel() {
+      statusMessage.textContent = '⌛ Loading models…';
+      sendBtn.disabled = true;
+      try {
+        [qaPipeline, codegenPipeline] = await Promise.all([
+          pipeline('question-answering', 'distilbert-base-uncased-distilled-squad'),
+          pipeline('text-generation', 'Salesforce/codegen-350M-mono')
+        ]);
+        statusMessage.textContent = '✅ Models loaded successfully!';
+      } catch (err) {
+        console.error(err);
+        statusMessage.textContent = `❌ Failed to load models: ${err.message}`;
+      }
+      sendBtn.disabled = false;
+    }
 
-        async function initModels() {
-            statusMessage.textContent = "⌛ Loading models... This may take a moment.";
-            sendBtn.disabled = true;
-            try {
-                qaPipeline = await pipeline('question-answering', 'Xenova/distilbert-base-uncased-distilled-squad');
-                codeGenPipeline = await pipeline('text-generation', 'Salesforce/codegen-350M-mono');
-                statusMessage.textContent = "✅ Models loaded successfully. You can now chat!";
-            } catch (error) {
-                statusMessage.textContent = `❌ Failed to load models: ${error.message}`;
-                console.error(error);
-            }
-            sendBtn.disabled = false;
+    // Load file as context
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      fileContext = text;
+      chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
+      chatLog.scrollTop = chatLog.scrollHeight;
+    });
+
+    // Decide which pipeline to use
+    function needsCodeGen(prompt) {
+      return /(?:write|generate|function|class|snippet|code)/i.test(prompt);
+    }
+
+    // Send message
+    async function sendMessage() {
+      if (!qaPipeline || !codegenPipeline) return;
+      const input = userInput.value.trim();
+      if (!input) return;
+
+      chatLog.textContent += `You: ${input}\n`;
+      userInput.value = '';
+      statusMessage.textContent = '🤖 Thinking…';
+      sendBtn.disabled = true;
+
+      try {
+        let reply;
+        if (needsCodeGen(input)) {
+          // Code generation
+          const prompt = `Generate code for the following request:\n${input}`;
+          const resp = await codegenPipeline(prompt, {
+            max_new_tokens: 150,
+            return_full_text: false,
+            stop_sequence: ['\n\n']
+          });
+          reply = resp[0].generated_text.trim();
+        } else {
+          // Question answering
+          const resp = await qaPipeline(input, fileContext);
+          reply = resp.answer.trim();
         }
 
-        fileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const text = await file.text();
-                fileContext = text;
-                chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
-            }
-        });
+        // Display
+        chatLog.textContent += `Bot: ${reply}\n\n`;
+        chatLog.scrollTop = chatLog.scrollHeight;
+      } catch (err) {
+        console.error(err);
+        chatLog.textContent += `Bot: ❌ Error: ${err.message}\n\n`;
+      } finally {
+        statusMessage.textContent = '✅ Ready for your next question!';
+        sendBtn.disabled = false;
+      }
+    }
 
-        async function sendMessage() {
-            if (!qaPipeline || !codeGenPipeline) {
-                return;
-            }
-
-            const input = userInput.value.trim();
-            if (!input) return;
-
-            chatLog.textContent += `You: ${input}\n`;
-            userInput.value = '';
-
-            statusMessage.textContent = "🤖 Bot is thinking...";
-            sendBtn.disabled = true;
-
-            try {
-                let reply;
-                // Keyword check to determine which model to use
-                const codeKeywords = ['code', 'function', 'syntax', 'javascript', 'python', 'html', 'css', 'php', 'java'];
-                const isCodeRequest = codeKeywords.some(keyword => input.toLowerCase().includes(keyword));
-
-                if (isCodeRequest) {
-                    const response = await codeGenPipeline(input, { max_new_tokens: 100, return_full_text: false });
-                    reply = response[0].generated_text.trim();
-                } else {
-                    if (fileContext) {
-                        const response = await qaPipeline(input, fileContext);
-                        reply = response.answer;
-                    } else {
-                        reply = "Please upload a text file to ask questions about it.";
-                    }
-                }
-
-                chatLog.textContent += `Bot: ${reply}\n\n`;
-                chatLog.scrollTop = chatLog.scrollHeight;
-
-            } catch (error) {
-                chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
-                console.error(error);
-            } finally {
-                statusMessage.textContent = "✅ Ready for your next question!";
-                sendBtn.disabled = false;
-            }
-        }
-
-        sendBtn.addEventListener('click', sendMessage);
-        userInput.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        });
-
-        window.onload = () => {
-          initModels();
-        };
-    </script>
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+    window.onload = initModel;
+  </script>
 </body>
 </html>
