@@ -126,6 +126,9 @@
                 modelId = `Xenova/${modelName}`;
             }
 
+            // Log the model ID to see if it's correct
+            console.log(`Loading model from: ${modelId}`);
+            
             activePipeline = await pipeline(task, modelId);
             statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
             sendBtn.disabled = false;
