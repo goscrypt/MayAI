@@ -106,32 +106,30 @@
         const statusMessage = document.getElementById('statusMessage');
         const modelSelect = document.getElementById('modelSelect');
 
-       async function initModel(modelName) {
-    statusMessage.textContent = `⌛ Loading ${modelName} model...`;
-    sendBtn.disabled = true;
+        async function initModel(modelName) {
+            statusMessage.textContent = `⌛ Loading ${modelName} model...`;
+            sendBtn.disabled = true;
 
-    // Correctly determine the model ID and task
-    let modelId = modelName;
-    let task;
+            let modelId = modelName;
+            let task;
 
-    if (modelName.includes('squad')) {
-        task = 'question-answering';
-        modelId = `Xenova/${modelName}`; // Add the prefix for this model
-    } else if (modelName.includes('codegen')) {
-        task = 'text-generation';
-        modelId = `Xenova/${modelName}`; // Add the prefix for this model
-    } else if (modelName.includes('distilgpt2')) {
-        task = 'text-generation';
-        // Note: this model doesn't need the 'Xenova/' prefix
-    } else {
-        task = 'feature-extraction';
-        modelId = `Xenova/${modelName}`; // Add the prefix for this model
-    }
+            if (modelName.includes('squad')) {
+                task = 'question-answering';
+                modelId = `Xenova/${modelName}`;
+            } else if (modelName.includes('codegen')) {
+                task = 'text-generation';
+                modelId = `Xenova/${modelName}`;
+            } else if (modelName.includes('distilgpt2')) {
+                task = 'text-generation';
+            } else {
+                task = 'feature-extraction';
+                modelId = `Xenova/${modelName}`;
+            }
 
-    activePipeline = await pipeline(task, modelId);
-    statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
-    sendBtn.disabled = false;
-}
+            activePipeline = await pipeline(task, modelId);
+            statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
+            sendBtn.disabled = false;
+        }
 
         // Initialize the default model on page load
         initModel(modelSelect.value);
@@ -158,17 +156,14 @@
             const input = userInput.value.trim();
             if (!input) return;
 
-            // Display user message immediately and clear input
             chatLog.textContent += `You: ${input}\n`;
             userInput.value = '';
 
-            // Show a "thinking" indicator
             statusMessage.textContent = "🤖 Bot is thinking...";
             sendBtn.disabled = true;
 
             try {
                 let reply;
-                const modelName = modelSelect.value;
                 const task = activePipeline.task;
 
                 if (task === 'question-answering') {
@@ -176,16 +171,14 @@
                     reply = response.answer;
                 } else if (task === 'text-generation') {
                     // For code generation and general text generation, the prompt is key.
-                    const prompt = `Based on the following context: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
+                    const prompt = `Based on the following text: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
                     const response = await activePipeline(prompt, { max_new_tokens: 100, return_full_text: false });
                     reply = response[0].generated_text;
                     
-                    // Simple cleanup for the text generation model
-                    const cleanRegex = /(Based on the following context:.*answer the question:.*)/g;
+                    const cleanRegex = /(Based on the following text:.*answer the question:.*)/g;
                     reply = reply.replace(cleanRegex, '').trim();
 
                 } else if (task === 'feature-extraction') {
-                    // This model doesn't generate text, but we can use it to find the most relevant sentence.
                     const sentences = fileContext.split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s/);
                     const queryEmbedding = await activePipeline(input, { pooling: 'mean', normalize: true });
                     const sentenceEmbeddings = await activePipeline(sentences, { pooling: 'mean', normalize: true });
@@ -210,7 +203,7 @@
                 }
                 
                 chatLog.textContent += `Bot: ${reply}\n\n`;
-                chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
+                chatLog.scrollTop = chatLog.scrollHeight;
             } catch (error) {
                 chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
             } finally {
