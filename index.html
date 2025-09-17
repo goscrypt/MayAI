@@ -78,14 +78,21 @@
         <h2>📄 AI Chatbot with File Context</h2>
         <div class="model-selector">
             <label for="modelSelect">Select a Model:</label>
-          <select id="modelSelect">
-              <option value="distilbert-base-uncased-distilled-squad">
-                Question Answering (Recommended)
-              </option>
-              <option value="Salesforce/codegen-350M-mono">
-                Code Generation (codegen-350M)
-              </option>
-          </select>
+         <select id="modelSelect">
+  <option value="distilbert-base-uncased-distilled-squad">
+    Question Answering (Recommended)
+  </option>
+  <option value="Salesforce/codegen-350M-mono">
+    Code Generation (codegen-350M)
+  </option>
+  <option value="distilgpt2">
+    Text Generation
+  </option>
+  <option value="all-MiniLM-L6-v2">
+    Sentence Embeddings
+  </option>
+</select>
+
 
         </div>
         <input type="file" id="fileInput" accept=".txt, .md, .csv">
@@ -109,7 +116,7 @@
         const statusMessage = document.getElementById('statusMessage');
         const modelSelect = document.getElementById('modelSelect');
 
-        async function initModel(modelName) {
+      async function initModel(modelName) {
   statusMessage.textContent = `⌛ Loading ${modelName} model…`;
   sendBtn.disabled = true;
 
@@ -149,6 +156,7 @@
   }
   sendBtn.disabled = false;
 }
+
 
 
         // Initialize the default model on page load
