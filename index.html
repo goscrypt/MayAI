@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Smart AI Chatbot with JS Code Assistant</title>
+  <meta charset="UTF-8" />
+  <title>Smart AI Chatbot + JS Code Assistant</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -11,16 +11,19 @@
       margin: auto;
       background-color: #f0f2f5;
     }
+
     .container {
-      background-color: white;
+      background: #fff;
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
+
     h2 {
-      color: #333;
       text-align: center;
+      color: #333;
     }
+
     #chatLog {
       width: 100%;
       height: 300px;
@@ -29,37 +32,43 @@
       font-family: monospace;
       border: 1px solid #ccc;
       border-radius: 4px;
+      background: #fafafa;
       resize: none;
       box-sizing: border-box;
-      background-color: #fafafa;
     }
+
     .input-group {
       display: flex;
       margin-top: 10px;
     }
+
     #userInput {
-      flex-grow: 1;
+      flex: 1;
       padding: 10px;
       border: 1px solid #ccc;
       border-radius: 4px;
     }
+
     #sendBtn {
       padding: 10px 20px;
       margin-left: 10px;
       background-color: #007bff;
-      color: white;
+      color: #fff;
       border: none;
       border-radius: 4px;
       cursor: pointer;
       transition: background-color 0.3s;
     }
+
     #sendBtn:hover {
       background-color: #0056b3;
     }
+
     #fileInput {
       width: 100%;
       margin-top: 10px;
     }
+
     .loading-message {
       text-align: center;
       color: #555;
@@ -70,35 +79,37 @@
 <body>
   <div class="container">
     <h2>🤖 Smart AI Chatbot + JS Code Assistant</h2>
-    <input type="file" id="fileInput" accept=".txt, .md, .csv">
+    <input type="file" id="fileInput" accept=".txt,.md,.csv" />
     <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
     <div class="input-group">
-      <input type="text" id="userInput" placeholder="Ask a question or request code...">
+      <input type="text" id="userInput" placeholder="Ask a question or request code..." />
       <button id="sendBtn">Send</button>
     </div>
     <div id="statusMessage" class="loading-message"></div>
   </div>
 
   <script type="module">
+    // Use the ESM build so browsers can import it directly
     import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1/dist/transformers.esm.js';
 
     let questionAnswerer;
     let codeGenerator;
     let fileContext = '';
-    const chatLog = document.getElementById('chatLog');
-    const fileInput = document.getElementById('fileInput');
-    const userInput = document.getElementById('userInput');
-    const sendBtn = document.getElementById('sendBtn');
+
+    const chatLog       = document.getElementById('chatLog');
+    const fileInput     = document.getElementById('fileInput');
+    const userInput     = document.getElementById('userInput');
+    const sendBtn       = document.getElementById('sendBtn');
     const statusMessage = document.getElementById('statusMessage');
 
+    // Triggers to detect code requests
     const codeTriggers = [
-      "create a program",
-      "write a code",
-      "generate a function",
-      "create a sample",
-      "build a script",
-      "make a function",
-      "code a solution"
+      'create a program',
+      'write a code',
+      'generate a function',
+      'build a script',
+      'make a function',
+      'code a solution'
     ];
 
     function isCodeRequest(text) {
@@ -107,73 +118,78 @@
     }
 
     async function initModels() {
-      statusMessage.textContent = "⌛ Loading AI models...";
+      statusMessage.textContent = '⌛ Loading AI models…';
       sendBtn.disabled = true;
 
+      // Question Answering model
       questionAnswerer = await pipeline(
         'question-answering',
         'Xenova/distilbert-base-uncased-distilled-squad'
       );
 
-      // Swap in the JS‐specialized model here:
+      // JavaScript‐specialized code generation model
       codeGenerator = await pipeline(
         'text-generation',
         'microsoft/codegpt-small-js'
       );
 
-      statusMessage.textContent = "✅ Models loaded (JS Code Assistant ready)";
+      statusMessage.textContent = '✅ Models loaded. Ready!';
       sendBtn.disabled = false;
     }
 
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (file) {
-        fileContext = await file.text();
-        chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
-      }
+      if (!file) return;
+      fileContext = await file.text();
+      chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
+      chatLog.scrollTop = chatLog.scrollHeight;
     });
 
     async function sendMessage() {
-      const input = userInput.value.trim();
-      if (!input) return;
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      // Lazy-load models if needed
       if (!questionAnswerer || !codeGenerator) {
         await initModels();
       }
 
-      chatLog.textContent += `You: ${input}\n`;
+      // Append user message
+      chatLog.textContent += `You: ${text}\n`;
       userInput.value = '';
-      statusMessage.textContent = "🤖 Thinking...";
+      statusMessage.textContent = '🤖 Thinking…';
       sendBtn.disabled = true;
 
       try {
-        let reply;
-        const wantsCode = isCodeRequest(input);
-        const hasFile    = fileContext.trim().length > 0;
+        let reply = '';
 
-        if (wantsCode) {
-          // JS code generation path
-          const out = await codeGenerator(
-            `// JavaScript\n${input}`,
+        // Code path
+        if (isCodeRequest(text)) {
+          const result = await codeGenerator(
+            `// JavaScript\n${text}`,
             { max_new_tokens: 150 }
           );
-          reply = out[0].generated_text;
-          statusMessage.textContent = "🧑‍💻 JS Code Assistant Mode";
+          reply = result[0].generated_text;
+          statusMessage.textContent = '🧑‍💻 JS Code Assistant Mode';
+
+        // Q&A path
         } else {
-          // QA over uploaded file
-          if (!hasFile) {
-            reply = "📂 Please upload a file so I can answer questions about it.";
-            statusMessage.textContent = "📄 File Q&A (no file loaded)";
+          if (!fileContext.trim()) {
+            reply = '📂 Please upload a file so I can answer questions about it.';
+            statusMessage.textContent = '📄 File Q&A (no file loaded)';
           } else {
-            const resp = await questionAnswerer(
-              { question: input, context: fileContext }
-            );
-            reply = resp.answer;
-            statusMessage.textContent = "📄 File Q&A Mode";
+            const res = await questionAnswerer({
+              question: text,
+              context:  fileContext
+            });
+            reply = res.answer;
+            statusMessage.textContent = '📄 File Q&A Mode';
           }
         }
 
         chatLog.textContent += `Bot: ${reply}\n\n`;
         chatLog.scrollTop = chatLog.scrollHeight;
+
       } catch (err) {
         chatLog.textContent += `Bot: ❌ Error: ${err.message}\n\n`;
       } finally {
