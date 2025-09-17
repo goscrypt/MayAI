@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>AI Chatbot with File Context</title>
-  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1/dist/transformers.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -32,47 +31,49 @@
   <input type="file" id="fileInput" accept=".txt"><br><br>
   <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea><br>
   <input type="text" id="userInput" placeholder="Ask your question...">
-  <button onclick="sendMessage()">Send</button>
+  <button id="sendBtn">Send</button>
 
-  <script>
-  let chat;
-  let fileContext = '';
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
-  async function initModel() {
-    chat = await window.transformers.pipeline('text-generation', 'Xenova/distilgpt2');
-    document.getElementById('chatLog').textContent += "✅ Model loaded successfully.\n\n";
-  }
+    let chat;
+    let fileContext = '';
 
-  document.getElementById('fileInput').addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const text = await file.text();
-      fileContext = text.slice(0, 1000); // Limit for performance
-      document.getElementById('chatLog').textContent += `📄 File loaded: ${file.name}\n\n`;
-    }
-  });
-
-  async function sendMessage() {
-    if (!chat) {
-      await initModel();
+    async function initModel() {
+      chat = await pipeline('text-generation', 'Xenova/distilgpt2');
+      document.getElementById('chatLog').textContent += "✅ Model loaded successfully.\n\n";
     }
 
-    const input = document.getElementById('userInput').value.trim();
-    if (!input) return;
-
-    const prompt = `${fileContext}\n\nUser: ${input}\nBot:`;
-    const response = await chat(prompt, {
-      max_new_tokens: 100,
-      return_full_text: false // ✅ Prevents echoing the prompt
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const text = await file.text();
+        fileContext = text.slice(0, 1000);
+        document.getElementById('chatLog').textContent += `📄 File loaded: ${file.name}\n\n`;
+      }
     });
 
-    const reply = response[0].generated_text.trim();
-    document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${reply}\n\n`;
-    document.getElementById('userInput').value = '';
-  }
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+      if (!chat) {
+        await initModel();
+      }
 
-  window.onload = initModel;
-</script>
+      const input = document.getElementById('userInput').value.trim();
+      if (!input) return;
 
+      const prompt = `${fileContext}\n\nUser: ${input}\nBot:`;
+      const response = await chat(prompt, {
+        max_new_tokens: 100,
+        return_full_text: false
+      });
+
+      const reply = response[0].generated_text.trim();
+      document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${reply}\n\n`;
+      document.getElementById('userInput').value = '';
+    });
+
+    // Optional: preload model
+    initModel();
+  </script>
 </body>
 </html>
