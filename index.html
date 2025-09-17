@@ -78,12 +78,21 @@
         <h2>📄 AI Chatbot with File Context</h2>
         <div class="model-selector">
             <label for="modelSelect">Select a Model:</label>
-            <select id="modelSelect">
-                <option value="distilbert-base-uncased-distilled-squad">Question Answering (Recommended)</option>
-                <option value="codegen-350M-mono">Code Generation</option>
-                <option value="distilgpt2">Text Generation</option>
-                <option value="all-MiniLM-L6-v2">Sentence Embeddings</option>
+          <select id="modelSelect">
+              <option value="distilbert-base-uncased-distilled-squad">
+                Question Answering (Recommended)
+              </option>
+              <option value="Salesforce/codegen-350M-mono">
+                Code Generation (codegen-350M)
+              </option>
+              <option value="distilgpt2">
+                Text Generation
+              </option>
+              <option value="all-MiniLM-L6-v2">
+                Sentence Embeddings
+              </option>
             </select>
+
         </div>
         <input type="file" id="fileInput" accept=".txt, .md, .csv">
         <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
@@ -107,31 +116,46 @@
         const modelSelect = document.getElementById('modelSelect');
 
         async function initModel(modelName) {
-            statusMessage.textContent = `⌛ Loading ${modelName} model...`;
-            sendBtn.disabled = true;
+  statusMessage.textContent = `⌛ Loading ${modelName} model…`;
+  sendBtn.disabled = true;
 
-            let modelId = modelName;
-            let task;
+  let modelId, task;
 
-            if (modelName === 'distilgpt2') {
-                task = 'text-generation';
-            } else {
-                task = modelName.includes('squad') ? 'question-answering' : 
-                       modelName.includes('codegen') ? 'text-generation' : 
-                       'feature-extraction';
-                modelId = `Xenova/${modelName}`;
-            }
+  if (modelName === 'distilgpt2') {
+    // Use Xenova’s hosted distilgpt2
+    modelId = 'Xenova/distilgpt2';
+    task    = 'text-generation';
+  }
+  else if (modelName.includes('/')) {
+    // Full Hugging Face ID passed in (e.g. Salesforce/codegen-350M-mono)
+    modelId = modelName;
+    task = modelName.includes('squad')
+      ? 'question-answering'
+      : modelName.includes('codegen')
+        ? 'text-generation'
+        : 'feature-extraction';
+  }
+  else {
+    // Fallback for other Xenova-hosted models
+    modelId = `Xenova/${modelName}`;
+    task = modelName.includes('squad')
+      ? 'question-answering'
+      : modelName.includes('codegen')
+        ? 'text-generation'
+        : 'feature-extraction';
+  }
 
-            console.log(`Attempting to load: ${modelId}`);
+  console.log(`Attempting to load: ${modelId} as ${task}`);
+  try {
+    activePipeline = await pipeline(task, modelId);
+    statusMessage.textContent = `✅ Model ${modelName} loaded successfully.`;
+  } catch (err) {
+    statusMessage.textContent = `❌ Failed to load model: ${err.message}`;
+    console.error(err);
+  }
+  sendBtn.disabled = false;
+}
 
-            try {
-                activePipeline = await pipeline(task, modelId);
-                statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
-            } catch (error) {
-                statusMessage.textContent = `❌ Failed to load model: ${error.message}`;
-            }
-            sendBtn.disabled = false;
-        }
 
         // Initialize the default model on page load
         initModel(modelSelect.value);
