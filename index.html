@@ -1,128 +1,45 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document AI Bot</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .chat-container {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 600px;
-            height: 80vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .chat-box {
-            flex-grow: 1;
-            padding: 20px;
-            overflow-y: auto;
-            border-bottom: 1px solid #ddd;
-        }
-        .message {
-            margin-bottom: 15px;
-            display: flex;
-        }
-        .bot-message {
-            justify-content: flex-start;
-        }
-        .user-message {
-            justify-content: flex-end;
-        }
-        .bot-message .content {
-            background-color: #e5e5ea;
-            color: black;
-            border-radius: 10px;
-            padding: 10px 15px;
-            max-width: 75%;
-        }
-        .user-message .content {
-            background-color: #007bff;
-            color: white;
-            border-radius: 10px;
-            padding: 10px 15px;
-            max-width: 75%;
-        }
-        .input-container {
-            display: flex;
-            padding: 10px;
-            border-top: 1px solid #ddd;
-        }
-        #chat-input {
-            flex-grow: 1;
-            border: 1px solid #ccc;
-            border-radius: 20px;
-            padding: 10px 15px;
-            font-size: 16px;
-            outline: none;
-        }
-        #send-button, #voice-button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            margin-left: 10px;
-            cursor: pointer;
-            font-size: 20px;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .file-upload-container {
-            padding: 10px;
-            text-align: center;
-            border-bottom: 1px solid #ddd;
-        }
-        #file-input {
-            display: none;
-        }
-        .file-label {
-            background-color: #28a745;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        #status {
-            margin-top: 10px;
-            color: #555;
-            font-size: 14px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Chatbot with File Context</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input, button { font-size: 1em; margin: 5px; }
+    pre { background: #f0f0f0; padding: 10px; white-space: pre-wrap; }
+  </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="file-upload-container">
-            <h3>Upload Your Document</h3>
-            <label for="file-input" class="file-label">Choose Document</label>
-            <input type="file" id="file-input" accept=".pdf,.txt,.doc,.docx">
-            <p id="status">Please upload a document to begin.</p>
-        </div>
-        <div class="chat-box" id="chat-box">
-            </div>
-        <div class="input-container">
-            <input type="text" id="chat-input" placeholder="Ask a question about the document...">
-            <button id="voice-button">🎤</button>
-            <button id="send-button">▶</button>
-        </div>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.0"></script>
-    <script src="script.js"></script>
+  <h2>Chatbot with File Context</h2>
+  <input type="file" id="fileInput" accept=".txt" />
+  <br>
+  <input id="userInput" placeholder="Ask your question..." size="50" />
+  <button onclick="sendMessage()">Send</button>
+  <pre id="chatLog"></pre>
+
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
+
+    const chat = await pipeline('text-generation', 'Xenova/distilgpt2');
+    let fileContext = '';
+
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const text = await file.text();
+        fileContext = text.slice(0, 1000); // Limit to 1000 chars for performance
+        document.getElementById('chatLog').textContent += `📄 File loaded: ${file.name}\n\n`;
+      }
+    });
+
+    window.sendMessage = async () => {
+      const input = document.getElementById('userInput').value;
+      const prompt = `${fileContext}\n\nUser: ${input}\nBot:`;
+      const response = await chat(prompt, { max_new_tokens: 100 });
+      document.getElementById('chatLog').textContent += `You: ${input}\nBot: ${response[0].generated_text}\n\n`;
+      document.getElementById('userInput').value = '';
+    };
+  </script>
 </body>
 </html>
