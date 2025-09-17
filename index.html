@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI Chatbot with File Context</title>
+    <title>Smart AI Chatbot</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -69,11 +69,11 @@
 </head>
 <body>
     <div class="container">
-        <h2>📄 AI Chatbot with File Context</h2>
+        <h2>🤖 Smart AI Chatbot</h2>
         <input type="file" id="fileInput" accept=".txt, .md, .csv">
         <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
         <div class="input-group">
-            <input type="text" id="userInput" placeholder="Ask your question...">
+            <input type="text" id="userInput" placeholder="Ask a question or request code...">
             <button id="sendBtn">Send</button>
         </div>
         <div id="statusMessage" class="loading-message"></div>
@@ -83,6 +83,7 @@
         import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
         let questionAnswerer;
+        let codeGenerator;
         let fileContext = '';
         const chatLog = document.getElementById('chatLog');
         const fileInput = document.getElementById('fileInput');
@@ -90,12 +91,29 @@
         const sendBtn = document.getElementById('sendBtn');
         const statusMessage = document.getElementById('statusMessage');
 
+        const codeTriggers = [
+            "create a program",
+            "write a code",
+            "generate a function",
+            "create a sample",
+            "build a script",
+            "make a function",
+            "code a solution"
+        ];
+
+        function isCodeRequest(input) {
+            const lowerInput = input.toLowerCase();
+            return codeTriggers.some(trigger => lowerInput.includes(trigger));
+        }
+
         async function initModel() {
-            statusMessage.textContent = "⌛ Loading Question-Answering model...";
+            statusMessage.textContent = "⌛ Loading models...";
             sendBtn.disabled = true;
-            // Load a model specifically for the question-answering task
+
             questionAnswerer = await pipeline('question-answering', 'Xenova/distilbert-base-uncased-distilled-squad');
-            statusMessage.textContent = "✅ Model loaded successfully. You can now chat!";
+            codeGenerator = await pipeline('text-generation', 'Xenova/codegen-350M-mono');
+
+            statusMessage.textContent = "✅ Models loaded. Ask away!";
             sendBtn.disabled = false;
         }
 
@@ -109,33 +127,43 @@
         });
 
         async function sendMessage() {
-            if (!questionAnswerer) {
+            if (!questionAnswerer || !codeGenerator) {
                 await initModel();
             }
 
             const input = userInput.value.trim();
             if (!input) return;
 
-            // Display user message immediately and clear input
             chatLog.textContent += `You: ${input}\n`;
             userInput.value = '';
-
-            // Show a "typing" indicator
             statusMessage.textContent = "🤖 Bot is thinking...";
             sendBtn.disabled = true;
 
             try {
-                // The question-answering model takes a question and a context directly.
-                const response = await questionAnswerer(input, fileContext);
-                
-                let reply = response.answer;
-                
+                let reply = '';
+                const isCode = isCodeRequest(input);
+                const hasFile = fileContext.trim().length > 0;
+
+                if (isCode) {
+                    const response = await codeGenerator(input, { max_new_tokens: 100 });
+                    reply = response[0].generated_text;
+                    statusMessage.textContent = "🧑‍💻 Code Assistant Mode";
+                } else {
+                    if (!hasFile) {
+                        reply = "📂 Please upload a file so I can answer questions based on its content.";
+                        statusMessage.textContent = "📄 File Q&A Mode (no file loaded)";
+                    } else {
+                        const response = await questionAnswerer(input, fileContext);
+                        reply = response.answer;
+                        statusMessage.textContent = "📄 File Q&A Mode";
+                    }
+                }
+
                 chatLog.textContent += `Bot: ${reply}\n\n`;
-                chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
+                chatLog.scrollTop = chatLog.scrollHeight;
             } catch (error) {
-                chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
+                chatLog.textContent += `Bot: ❌ Error: ${error.message}\n\n`;
             } finally {
-                statusMessage.textContent = "✅ Ready for your next question!";
                 sendBtn.disabled = false;
             }
         }
