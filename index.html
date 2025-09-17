@@ -106,19 +106,32 @@
         const statusMessage = document.getElementById('statusMessage');
         const modelSelect = document.getElementById('modelSelect');
 
-        async function initModel(modelName) {
-            statusMessage.textContent = `⌛ Loading ${modelName} model...`;
-            sendBtn.disabled = true;
+       async function initModel(modelName) {
+    statusMessage.textContent = `⌛ Loading ${modelName} model...`;
+    sendBtn.disabled = true;
 
-            const task = modelName.includes('squad') ? 'question-answering' : 
-                         modelName.includes('codegen') ? 'text-generation' : 
-                         modelName.includes('distilgpt2') ? 'text-generation' :
-                         'feature-extraction';
+    // Correctly determine the model ID and task
+    let modelId = modelName;
+    let task;
 
-            activePipeline = await pipeline(task, modelName);
-            statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
-            sendBtn.disabled = false;
-        }
+    if (modelName.includes('squad')) {
+        task = 'question-answering';
+        modelId = `Xenova/${modelName}`; // Add the prefix for this model
+    } else if (modelName.includes('codegen')) {
+        task = 'text-generation';
+        modelId = `Xenova/${modelName}`; // Add the prefix for this model
+    } else if (modelName.includes('distilgpt2')) {
+        task = 'text-generation';
+        // Note: this model doesn't need the 'Xenova/' prefix
+    } else {
+        task = 'feature-extraction';
+        modelId = `Xenova/${modelName}`; // Add the prefix for this model
+    }
+
+    activePipeline = await pipeline(task, modelId);
+    statusMessage.textContent = `✅ Model ${modelName} loaded successfully. You can now chat!`;
+    sendBtn.disabled = false;
+}
 
         // Initialize the default model on page load
         initModel(modelSelect.value);
