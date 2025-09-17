@@ -80,6 +80,7 @@
             <label for="modelSelect">Select a Model:</label>
             <select id="modelSelect">
                 <option value="distilbert-base-uncased-distilled-squad">Question Answering (Recommended)</option>
+                <option value="Xenova/codegen-350M-mono">Code Generation</option>
                 <option value="distilgpt2">Text Generation</option>
                 <option value="Xenova/all-MiniLM-L6-v2">Sentence Embeddings</option>
             </select>
@@ -110,6 +111,7 @@
             sendBtn.disabled = true;
 
             const task = modelName.includes('squad') ? 'question-answering' : 
+                         modelName.includes('codegen') ? 'text-generation' : 
                          modelName.includes('distilgpt2') ? 'text-generation' :
                          'feature-extraction';
 
