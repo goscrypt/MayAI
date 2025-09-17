@@ -80,10 +80,9 @@
     </div>
 
     <script type="module">
-        import { pipeline, AutoTokenizer, AutoModel } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
+        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
-        let textGenerator;
-        let sentenceEncoder;
+        let questionAnswerer;
         let fileContext = '';
         const chatLog = document.getElementById('chatLog');
         const fileInput = document.getElementById('fileInput');
@@ -91,18 +90,12 @@
         const sendBtn = document.getElementById('sendBtn');
         const statusMessage = document.getElementById('statusMessage');
 
-        // This is a new, two-step model loading process
-        async function initModels() {
-            statusMessage.textContent = "⌛ Loading AI models...";
+        async function initModel() {
+            statusMessage.textContent = "⌛ Loading Question-Answering model...";
             sendBtn.disabled = true;
-
-            // Load a model specifically for encoding sentences
-            sentenceEncoder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-            
-            // Load a model for generating text (our chatbot)
-            textGenerator = await pipeline('text-generation', 'Xenova/distilgpt2');
-
-            statusMessage.textContent = "✅ Models loaded successfully. You can now chat!";
+            // Load a model specifically for the question-answering task
+            questionAnswerer = await pipeline('question-answering', 'Xenova/distilbert-base-uncased-distilled-squad');
+            statusMessage.textContent = "✅ Model loaded successfully. You can now chat!";
             sendBtn.disabled = false;
         }
 
@@ -115,17 +108,9 @@
             }
         });
 
-        // This is a helper function to calculate the similarity between two sentences
-        function cosineSimilarity(a, b) {
-            const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
-            const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-            const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-            return dotProduct / (magnitudeA * magnitudeB);
-        }
-
         async function sendMessage() {
-            if (!textGenerator || !sentenceEncoder) {
-                await initModels();
+            if (!questionAnswerer) {
+                await initModel();
             }
 
             const input = userInput.value.trim();
@@ -136,44 +121,15 @@
             userInput.value = '';
 
             // Show a "typing" indicator
-            statusMessage.textContent = "🤖 Bot is typing...";
+            statusMessage.textContent = "🤖 Bot is thinking...";
             sendBtn.disabled = true;
 
             try {
-                // Step 1: Smart Information Retrieval
-                // We'll split the text file into individual sentences.
-                const sentences = fileContext.split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s/);
+                // The question-answering model takes a question and a context directly.
+                const response = await questionAnswerer(input, fileContext);
                 
-                // We'll encode the user's question and all sentences from the file.
-                const queryEmbedding = await sentenceEncoder(input, { pooling: 'mean', normalize: true });
-                const sentenceEmbeddings = await sentenceEncoder(sentences, { pooling: 'mean', normalize: true });
-
-                // Find the most relevant sentence by comparing embeddings
-                let maxSimilarity = -1;
-                let mostRelevantSentence = '';
-                for (let i = 0; i < sentences.length; i++) {
-                    const similarity = cosineSimilarity(queryEmbedding.data, sentenceEmbeddings.data[i]);
-                    if (similarity > maxSimilarity) {
-                        maxSimilarity = similarity;
-                        mostRelevantSentence = sentences[i];
-                    }
-                }
-
-                // Step 2: Concise Generation
-                // We'll create a new, concise prompt using ONLY the most relevant sentence.
-                const prompt = `Based on this information: "${mostRelevantSentence}", answer the question: "${input}"`;
-
-                const response = await textGenerator(prompt, {
-                    max_new_tokens: 50, // Keep this low to force a concise answer
-                    return_full_text: false,
-                });
-
-                let reply = response[0].generated_text.trim();
-
-                // Final cleanup to remove any lingering prompt text
-                const cleanRegex = /(Based on this information:.*answer the question:.*|Assistant:|\n)+/g;
-                reply = reply.replace(cleanRegex, '').trim();
-
+                let reply = response.answer;
+                
                 chatLog.textContent += `Bot: ${reply}\n\n`;
                 chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
             } catch (error) {
@@ -191,7 +147,7 @@
             }
         });
 
-        window.onload = initModels;
+        window.onload = initModel;
     </script>
 </body>
 </html>
