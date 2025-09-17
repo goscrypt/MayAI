@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI Chatbot with File Context</title>
+    <title>Intelligent AI Chatbot</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -65,35 +65,11 @@
             color: #555;
             margin-top: 10px;
         }
-        .model-selector {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-            justify-content: center;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>📄 AI Chatbot with File Context</h2>
-        <div class="model-selector">
-            <label for="modelSelect">Select a Model:</label>
-          <select id="modelSelect">
-              <option value="distilbert-base-uncased-distilled-squad">
-                Question Answering (Recommended)
-              </option>
-              <option value="Salesforce/codegen-350M-mono">
-                Code Generation (codegen-350M)
-              </option>
-              <option value="distilgpt2">
-                Text Generation
-              </option>
-              <option value="all-MiniLM-L6-v2">
-                Sentence Embeddings
-              </option>
-            </select>
-
-        </div>
+        <h2>📄 Intelligent AI Chatbot</h2>
         <input type="file" id="fileInput" accept=".txt, .md, .csv">
         <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
         <div class="input-group">
@@ -106,64 +82,29 @@
     <script type="module">
         import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1';
 
-        let activePipeline;
+        let qaPipeline;
+        let codeGenPipeline;
         let fileContext = '';
+
         const chatLog = document.getElementById('chatLog');
         const fileInput = document.getElementById('fileInput');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const statusMessage = document.getElementById('statusMessage');
-        const modelSelect = document.getElementById('modelSelect');
 
-        async function initModel(modelName) {
-  statusMessage.textContent = `⌛ Loading ${modelName} model…`;
-  sendBtn.disabled = true;
-
-  let modelId, task;
-
-  if (modelName === 'distilgpt2') {
-    // Use Xenova’s hosted distilgpt2
-    modelId = 'Xenova/distilgpt2';
-    task    = 'text-generation';
-  }
-  else if (modelName.includes('/')) {
-    // Full Hugging Face ID passed in (e.g. Salesforce/codegen-350M-mono)
-    modelId = modelName;
-    task = modelName.includes('squad')
-      ? 'question-answering'
-      : modelName.includes('codegen')
-        ? 'text-generation'
-        : 'feature-extraction';
-  }
-  else {
-    // Fallback for other Xenova-hosted models
-    modelId = `Xenova/${modelName}`;
-    task = modelName.includes('squad')
-      ? 'question-answering'
-      : modelName.includes('codegen')
-        ? 'text-generation'
-        : 'feature-extraction';
-  }
-
-  console.log(`Attempting to load: ${modelId} as ${task}`);
-  try {
-    activePipeline = await pipeline(task, modelId);
-    statusMessage.textContent = `✅ Model ${modelName} loaded successfully.`;
-  } catch (err) {
-    statusMessage.textContent = `❌ Failed to load model: ${err.message}`;
-    console.error(err);
-  }
-  sendBtn.disabled = false;
-}
-
-
-        // Initialize the default model on page load
-        initModel(modelSelect.value);
-
-        // Re-initialize the model when a new one is selected
-        modelSelect.addEventListener('change', (event) => {
-            initModel(event.target.value);
-        });
+        async function initModels() {
+            statusMessage.textContent = "⌛ Loading models... This may take a moment.";
+            sendBtn.disabled = true;
+            try {
+                qaPipeline = await pipeline('question-answering', 'Xenova/distilbert-base-uncased-distilled-squad');
+                codeGenPipeline = await pipeline('text-generation', 'Salesforce/codegen-350M-mono');
+                statusMessage.textContent = "✅ Models loaded successfully. You can now chat!";
+            } catch (error) {
+                statusMessage.textContent = `❌ Failed to load models: ${error.message}`;
+                console.error(error);
+            }
+            sendBtn.disabled = false;
+        }
 
         fileInput.addEventListener('change', async (event) => {
             const file = event.target.files[0];
@@ -175,7 +116,7 @@
         });
 
         async function sendMessage() {
-            if (!activePipeline) {
+            if (!qaPipeline || !codeGenPipeline) {
                 return;
             }
 
@@ -190,47 +131,28 @@
 
             try {
                 let reply;
-                const task = activePipeline.task;
+                // Keyword check to determine which model to use
+                const codeKeywords = ['code', 'function', 'syntax', 'javascript', 'python', 'html', 'css', 'php', 'java'];
+                const isCodeRequest = codeKeywords.some(keyword => input.toLowerCase().includes(keyword));
 
-                if (task === 'question-answering') {
-                    const response = await activePipeline(input, fileContext);
-                    reply = response.answer;
-                } else if (task === 'text-generation') {
-                    const prompt = `Based on the following text: "${fileContext.substring(0, 1000)}", answer the question: "${input}"`;
-                    const response = await activePipeline(prompt, { max_new_tokens: 100, return_full_text: false });
-                    reply = response[0].generated_text;
-                    
-                    const cleanRegex = /(Based on the following text:.*answer the question:.*)/g;
-                    reply = reply.replace(cleanRegex, '').trim();
-
-                } else if (task === 'feature-extraction') {
-                    const sentences = fileContext.split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s/);
-                    const queryEmbedding = await activePipeline(input, { pooling: 'mean', normalize: true });
-                    const sentenceEmbeddings = await activePipeline(sentences, { pooling: 'mean', normalize: true });
-
-                    const cosineSimilarity = (a, b) => {
-                        const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
-                        const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-                        const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-                        return dotProduct / (magnitudeA * magnitudeB);
-                    };
-
-                    let maxSimilarity = -1;
-                    let mostRelevantSentence = 'No relevant information found.';
-                    for (let i = 0; i < sentences.length; i++) {
-                        const similarity = cosineSimilarity(queryEmbedding.data, sentenceEmbeddings.data[i]);
-                        if (similarity > maxSimilarity) {
-                            maxSimilarity = similarity;
-                            mostRelevantSentence = sentences[i];
-                        }
+                if (isCodeRequest) {
+                    const response = await codeGenPipeline(input, { max_new_tokens: 100, return_full_text: false });
+                    reply = response[0].generated_text.trim();
+                } else {
+                    if (fileContext) {
+                        const response = await qaPipeline(input, fileContext);
+                        reply = response.answer;
+                    } else {
+                        reply = "Please upload a text file to ask questions about it.";
                     }
-                    reply = mostRelevantSentence;
                 }
-                
+
                 chatLog.textContent += `Bot: ${reply}\n\n`;
                 chatLog.scrollTop = chatLog.scrollHeight;
+
             } catch (error) {
                 chatLog.textContent += `Bot: ❌ An error occurred: ${error.message}\n\n`;
+                console.error(error);
             } finally {
                 statusMessage.textContent = "✅ Ready for your next question!";
                 sendBtn.disabled = false;
@@ -245,7 +167,7 @@
         });
 
         window.onload = () => {
-          initModel(modelSelect.value);
+          initModels();
         };
     </script>
 </body>
