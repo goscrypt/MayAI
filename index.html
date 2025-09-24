@@ -1,208 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Smart AI Chatbot + JS Code Assistant</title>
+  <meta charset="UTF-8">
+  <title>Browser RAG Chatbot</title>
+  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vectorstore"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      max-width: 600px;
-      margin: auto;
-      background-color: #f0f2f5;
-    }
-
-    .container {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-
-    h2 {
-      text-align: center;
-      color: #333;
-    }
-
-    #chatLog {
-      width: 100%;
-      height: 300px;
-      margin-top: 10px;
-      padding: 10px;
-      font-family: monospace;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #fafafa;
-      resize: none;
-      box-sizing: border-box;
-    }
-
-    .input-group {
-      display: flex;
-      margin-top: 10px;
-    }
-
-    #userInput {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-
-    #sendBtn {
-      padding: 10px 20px;
-      margin-left: 10px;
-      background-color: #007bff;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-
-    #sendBtn:hover {
-      background-color: #0056b3;
-    }
-
-    #fileInput {
-      width: 100%;
-      margin-top: 10px;
-    }
-
-    .loading-message {
-      text-align: center;
-      color: #555;
-      margin-top: 10px;
-    }
+    body { font-family: sans-serif; padding: 2em; max-width: 600px; margin: auto; }
+    textarea, input[type="file"] { width: 100%; margin-bottom: 1em; }
+    button { padding: 0.5em 1em; }
+    #response { white-space: pre-wrap; margin-top: 1em; background: #f9f9f9; padding: 1em; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>🤖 Smart AI Chatbot + JS Code Assistant</h2>
-    <input type="file" id="fileInput" accept=".txt,.md,.csv" />
-    <textarea id="chatLog" readonly placeholder="Chat log will appear here..."></textarea>
-    <div class="input-group">
-      <input type="text" id="userInput" placeholder="Ask a question or request code..." />
-      <button id="sendBtn">Send</button>
-    </div>
-    <div id="statusMessage" class="loading-message"></div>
-  </div>
+  <h2>🧠 RAG Chatbot (In-Browser)</h2>
+  <input type="file" id="fileInput" accept=".txt">
+  <textarea id="query" rows="3" placeholder="Ask a question..."></textarea>
+  <button onclick="runRAG()">Generate Answer</button>
+  <div id="response"></div>
 
-  <script type="module">
-    // Use the ESM build so browsers can import it directly
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.1/dist/transformers.esm.js';
+  <script>
+    let chunks = [];
+    let store;
 
-    let questionAnswerer;
-    let codeGenerator;
-    let fileContext = '';
-
-    const chatLog       = document.getElementById('chatLog');
-    const fileInput     = document.getElementById('fileInput');
-    const userInput     = document.getElementById('userInput');
-    const sendBtn       = document.getElementById('sendBtn');
-    const statusMessage = document.getElementById('statusMessage');
-
-    // Triggers to detect code requests
-    const codeTriggers = [
-      'create a program',
-      'write a code',
-      'generate a function',
-      'build a script',
-      'make a function',
-      'code a solution'
-    ];
-
-    function isCodeRequest(text) {
-      const lower = text.toLowerCase();
-      return codeTriggers.some(trigger => lower.includes(trigger));
+    async function chunkText(text, size = 200) {
+      const words = text.split(/\s+/);
+      const result = [];
+      for (let i = 0; i < words.length; i += size) {
+        result.push(words.slice(i, i + size).join(" "));
+      }
+      return result;
     }
 
-    async function initModels() {
-      statusMessage.textContent = '⌛ Loading AI models…';
-      sendBtn.disabled = true;
-
-      // Question Answering model
-      questionAnswerer = await pipeline(
-        'question-answering',
-        'Xenova/distilbert-base-uncased-distilled-squad'
-      );
-
-      // JavaScript‐specialized code generation model
-      codeGenerator = await pipeline(
-        'text-generation',
-        'microsoft/codegpt-small-js'
-      );
-
-      statusMessage.textContent = '✅ Models loaded. Ready!';
-      sendBtn.disabled = false;
-    }
-
-    fileInput.addEventListener('change', async (e) => {
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      fileContext = await file.text();
-      chatLog.textContent += `📄 File loaded: ${file.name}\n\n`;
-      chatLog.scrollTop = chatLog.scrollHeight;
+      const text = await file.text();
+      chunks = await chunkText(text);
+      store = await VectorStore.fromTexts(chunks);
+      document.getElementById('response').innerText = "✅ File loaded and indexed.";
     });
 
-    async function sendMessage() {
-      const text = userInput.value.trim();
-      if (!text) return;
+    async function runRAG() {
+      const query = document.getElementById('query').value;
+      if (!store || !query) return;
 
-      // Lazy-load models if needed
-      if (!questionAnswerer || !codeGenerator) {
-        await initModels();
-      }
+      const results = await store.similaritySearch(query, 3);
+      const context = results.map(r => r.text).join("\n");
 
-      // Append user message
-      chatLog.textContent += `You: ${text}\n`;
-      userInput.value = '';
-      statusMessage.textContent = '🤖 Thinking…';
-      sendBtn.disabled = true;
+      const pipeline = await window.transformers.pipeline('text-generation', 'Xenova/distilGPT2');
+      const output = await pipeline(`Answer based on:\n${context}\nQuestion: ${query}`, { max_new_tokens: 100 });
 
-      try {
-        let reply = '';
-
-        // Code path
-        if (isCodeRequest(text)) {
-          const result = await codeGenerator(
-            `// JavaScript\n${text}`,
-            { max_new_tokens: 150 }
-          );
-          reply = result[0].generated_text;
-          statusMessage.textContent = '🧑‍💻 JS Code Assistant Mode';
-
-        // Q&A path
-        } else {
-          if (!fileContext.trim()) {
-            reply = '📂 Please upload a file so I can answer questions about it.';
-            statusMessage.textContent = '📄 File Q&A (no file loaded)';
-          } else {
-            const res = await questionAnswerer({
-              question: text,
-              context:  fileContext
-            });
-            reply = res.answer;
-            statusMessage.textContent = '📄 File Q&A Mode';
-          }
-        }
-
-        chatLog.textContent += `Bot: ${reply}\n\n`;
-        chatLog.scrollTop = chatLog.scrollHeight;
-
-      } catch (err) {
-        chatLog.textContent += `Bot: ❌ Error: ${err.message}\n\n`;
-      } finally {
-        sendBtn.disabled = false;
-      }
+      document.getElementById('response').innerText = output[0].generated_text;
     }
-
-    sendBtn.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') sendMessage();
-    });
-
-    window.addEventListener('load', initModels);
   </script>
 </body>
 </html>
