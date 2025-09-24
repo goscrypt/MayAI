@@ -2,104 +2,135 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Local RAG Chatbot</title>
- <script type="module" src="js/transformers.min.js"></script>
-
+  <title>Local RAG Chatbot (ESM, No Server)</title>
   <style>
-    body { font-family: sans-serif; padding: 2em; max-width: 600px; margin: auto; }
-    textarea, input[type="file"] { width: 100%; margin-bottom: 1em; }
-    button { padding: 0.5em 1em; margin-right: 0.5em; }
-    #response { white-space: pre-wrap; margin-top: 1em; background: #f0f0f0; padding: 1em; border-radius: 5px; }
+    body {
+      font-family: sans-serif;
+      padding: 2em;
+      max-width: 600px;
+      margin: auto;
+    }
+    input, textarea {
+      width: 100%;
+      margin-bottom: 1em;
+    }
+    button {
+      padding: .5em 1em;
+      margin-right: .5em;
+    }
+    #response {
+      white-space: pre-wrap;
+      background: #fafafa;
+      padding: 1em;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <h2>🧠 RAG Chatbot (Local + Cached)</h2>
+  <h2>🧠 RAG Chatbot (File:// – No Server)</h2>
+
   <input type="file" id="fileInput" accept=".txt" />
-  <textarea id="query" rows="3" placeholder="Ask a question..."></textarea>
-  <button onclick="runRAG()">Generate Answer</button>
-  <button onclick="clearCache()">🧹 Clear Cache</button>
-  <div id="response"></div>
+  <textarea id="query" rows="3" placeholder="Ask a question…"></textarea>
+  <button id="go">Generate Answer</button>
+  <button id="clear">🧹 Clear Cache</button>
 
-  <script>
-    let chunks = [], embeddings = [], pipeline;
+  <div id="response">Load a .txt file to get started.</div>
 
+  <!-- everything below runs as an ES module -->
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@latest/dist/transformers.esm.js';
+
+    // state
+    let chunks = [];
+    let embeddings = [];
+    let llm;      // text‐generation pipeline
+
+    // split into ~200-word chunks
     function chunkText(text, size = 200) {
       const words = text.split(/\s+/);
-      const result = [];
+      const out = [];
       for (let i = 0; i < words.length; i += size) {
-        result.push(words.slice(i, i + size).join(" "));
+        out.push(words.slice(i, i + size).join(' '));
       }
-      return result;
+      return out;
     }
 
+    // get a 1D vector per chunk
     async function embedChunks(chunks) {
-      const embedder = await window.transformers.pipeline("feature-extraction", "Xenova/nomic-embed-text-v1");
-      const vectors = [];
-      for (const chunk of chunks) {
-        const output = await embedder(chunk);
-        vectors.push(output[0]); // flatten
+      const embed = await pipeline('feature-extraction', 'Xenova/nomic-embed-text-v1');
+      const vecs = [];
+      for (let c of chunks) {
+        const o = await embed(c);
+        vecs.push(o[0]);
       }
-      return vectors;
+      return vecs;
     }
 
-    function cosineSimilarity(a, b) {
-      const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
-      const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-      const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-      return dot / (normA * normB);
+    function cosine(a, b) {
+      let dot=0, magA=0, magB=0;
+      for (let i=0; i<a.length; i++) {
+        dot   += a[i]*b[i];
+        magA  += a[i]*a[i];
+        magB  += b[i]*b[i];
+      }
+      return dot / (Math.sqrt(magA)*Math.sqrt(magB));
     }
 
     async function runRAG() {
-      const query = document.getElementById("query").value;
-      if (!query || chunks.length === 0 || embeddings.length === 0) return;
+      const q = document.getElementById('query').value.trim();
+      if (!q || embeddings.length === 0) return;
 
-      const embedder = await window.transformers.pipeline("feature-extraction", "Xenova/nomic-embed-text-v1");
-      const queryVec = (await embedder(query))[0];
+      // embed the query
+      const embed = await pipeline('feature-extraction', 'Xenova/nomic-embed-text-v1');
+      const qVec = (await embed(q))[0];
 
-      const scores = embeddings.map(vec => cosineSimilarity(vec, queryVec));
-      const topIndices = scores
-        .map((score, i) => ({ score, i }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map(obj => obj.i);
+      // score & pick top-3
+      const scores = embeddings.map((v,i)=>({i, s:cosine(v,qVec)}));
+      const top3   = scores.sort((a,b)=>b.s - a.s).slice(0,3).map(o=>o.i);
+      const ctx    = top3.map(i=>chunks[i]).join('\n');
 
-      const context = topIndices.map(i => chunks[i]).join("\n");
-
-      if (!pipeline) {
-        pipeline = await window.transformers.pipeline("text-generation", "Xenova/distilGPT2");
+      // lazy-load LLM
+      if (!llm) {
+        llm = await pipeline('text-generation', 'Xenova/distilGPT2');
       }
 
-      const prompt = `Answer based on:\n${context}\nQuestion: ${query}`;
-      const output = await pipeline(prompt, { max_new_tokens: 100 });
-      document.getElementById("response").innerText = output[0].generated_text;
+      const prompt = `Answer based on:\n${ctx}\nQuestion: ${q}`;
+      const out    = await llm(prompt, { max_new_tokens: 100 });
+      document.getElementById('response').innerText = out[0].generated_text;
     }
 
-    document.getElementById("fileInput").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const text = await file.text();
-      chunks = chunkText(text);
-      embeddings = await embedChunks(chunks);
-      localStorage.setItem("rag_chunks", JSON.stringify(chunks));
-      localStorage.setItem("rag_embeddings", JSON.stringify(embeddings));
-      document.getElementById("response").innerText = "✅ File loaded and cached.";
+    // file upload: chunk, embed, cache
+    document.getElementById('fileInput').addEventListener('change', async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const txt = await f.text();
+      chunks    = chunkText(txt);
+      embeddings= await embedChunks(chunks);
+
+      localStorage.setItem('rag_chunks', JSON.stringify(chunks));
+      localStorage.setItem('rag_embeddings', JSON.stringify(embeddings));
+
+      document.getElementById('response').innerText = '✅ File loaded & cached.';
     });
 
-    function clearCache() {
-      localStorage.removeItem("rag_chunks");
-      localStorage.removeItem("rag_embeddings");
-      chunks = [];
-      embeddings = [];
-      document.getElementById("response").innerText = "🧹 Cache cleared.";
-    }
+    // clear everything
+    document.getElementById('clear').onclick = () => {
+      localStorage.removeItem('rag_chunks');
+      localStorage.removeItem('rag_embeddings');
+      chunks = embeddings = [];
+      document.getElementById('response').innerText = '🧹 Cache cleared.';
+    };
 
-    window.addEventListener("load", () => {
-      const cachedChunks = localStorage.getItem("rag_chunks");
-      const cachedEmbeddings = localStorage.getItem("rag_embeddings");
-      if (cachedChunks && cachedEmbeddings) {
-        chunks = JSON.parse(cachedChunks);
-        embeddings = JSON.parse(cachedEmbeddings);
-        document.getElementById("response").innerText = "📦 Cached data loaded.";
+    document.getElementById('go').onclick = runRAG;
+
+    // on load, restore cache
+    window.addEventListener('load', () => {
+      const c = localStorage.getItem('rag_chunks');
+      const e = localStorage.getItem('rag_embeddings');
+      if (c && e) {
+        chunks     = JSON.parse(c);
+        embeddings = JSON.parse(e);
+        document.getElementById('response').innerText = '📦 Cached data loaded.';
       }
     });
   </script>
