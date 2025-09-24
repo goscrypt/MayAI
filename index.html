@@ -1,29 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Browser RAG Chatbot</title>
+  <meta charset="UTF-8" />
+  <title>Local RAG Chatbot</title>
   <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vectorstore"></script>
   <style>
     body { font-family: sans-serif; padding: 2em; max-width: 600px; margin: auto; }
     textarea, input[type="file"] { width: 100%; margin-bottom: 1em; }
     button { padding: 0.5em 1em; }
-    #response { white-space: pre-wrap; margin-top: 1em; background: #f9f9f9; padding: 1em; border-radius: 5px; }
+    #response { white-space: pre-wrap; margin-top: 1em; background: #f0f0f0; padding: 1em; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <h2>🧠 RAG Chatbot (In-Browser)</h2>
-  <input type="file" id="fileInput" accept=".txt">
+  <h2>🧠 RAG Chatbot (Local + Cached)</h2>
+  <input type="file" id="fileInput" accept=".txt" />
   <textarea id="query" rows="3" placeholder="Ask a question..."></textarea>
   <button onclick="runRAG()">Generate Answer</button>
+  <button onclick="clearCache()">🧹 Clear Cache</button>
   <div id="response"></div>
 
   <script>
-    let chunks = [];
-    let store;
+    let chunks = [], embeddings = [], pipeline;
 
-    async function chunkText(text, size = 200) {
+    function chunkText(text, size = 200) {
       const words = text.split(/\s+/);
       const result = [];
       for (let i = 0; i < words.length; i += size) {
@@ -32,27 +31,77 @@
       return result;
     }
 
-    document.getElementById('fileInput').addEventListener('change', async (e) => {
+    async function embedChunks(chunks) {
+      const embedder = await window.transformers.pipeline("feature-extraction", "Xenova/nomic-embed-text-v1");
+      const vectors = [];
+      for (const chunk of chunks) {
+        const output = await embedder(chunk);
+        vectors.push(output[0]); // flatten
+      }
+      return vectors;
+    }
+
+    function cosineSimilarity(a, b) {
+      const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
+      const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+      const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+      return dot / (normA * normB);
+    }
+
+    async function runRAG() {
+      const query = document.getElementById("query").value;
+      if (!query || chunks.length === 0 || embeddings.length === 0) return;
+
+      const embedder = await window.transformers.pipeline("feature-extraction", "Xenova/nomic-embed-text-v1");
+      const queryVec = (await embedder(query))[0];
+
+      const scores = embeddings.map(vec => cosineSimilarity(vec, queryVec));
+      const topIndices = scores
+        .map((score, i) => ({ score, i }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map(obj => obj.i);
+
+      const context = topIndices.map(i => chunks[i]).join("\n");
+
+      if (!pipeline) {
+        pipeline = await window.transformers.pipeline("text-generation", "Xenova/distilGPT2");
+      }
+
+      const prompt = `Answer based on:\n${context}\nQuestion: ${query}`;
+      const output = await pipeline(prompt, { max_new_tokens: 100 });
+      document.getElementById("response").innerText = output[0].generated_text;
+    }
+
+    document.getElementById("fileInput").addEventListener("change", async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const text = await file.text();
-      chunks = await chunkText(text);
-      store = await VectorStore.fromTexts(chunks);
-      document.getElementById('response').innerText = "✅ File loaded and indexed.";
+      chunks = chunkText(text);
+      embeddings = await embedChunks(chunks);
+      localStorage.setItem("rag_chunks", JSON.stringify(chunks));
+      localStorage.setItem("rag_embeddings", JSON.stringify(embeddings));
+      document.getElementById("response").innerText = "✅ File loaded and cached.";
     });
 
-    async function runRAG() {
-      const query = document.getElementById('query').value;
-      if (!store || !query) return;
-
-      const results = await store.similaritySearch(query, 3);
-      const context = results.map(r => r.text).join("\n");
-
-      const pipeline = await window.transformers.pipeline('text-generation', 'Xenova/distilGPT2');
-      const output = await pipeline(`Answer based on:\n${context}\nQuestion: ${query}`, { max_new_tokens: 100 });
-
-      document.getElementById('response').innerText = output[0].generated_text;
+    function clearCache() {
+      localStorage.removeItem("rag_chunks");
+      localStorage.removeItem("rag_embeddings");
+      chunks = [];
+      embeddings = [];
+      document.getElementById("response").innerText = "🧹 Cache cleared.";
     }
+
+    // Load from cache if available
+    window.addEventListener("load", () => {
+      const cachedChunks = localStorage.getItem("rag_chunks");
+      const cachedEmbeddings = localStorage.getItem("rag_embeddings");
+      if (cachedChunks && cachedEmbeddings) {
+        chunks = JSON.parse(cachedChunks);
+        embeddings = JSON.parse(cachedEmbeddings);
+        document.getElementById("response").innerText = "📦 Cached data loaded.";
+      }
+    });
   </script>
 </body>
 </html>
