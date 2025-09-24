@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <title>Local RAG Chatbot</title>
-  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
+ <script type="module" src="js/transformers.min.js"></script>
+
   <style>
     body { font-family: sans-serif; padding: 2em; max-width: 600px; margin: auto; }
     textarea, input[type="file"] { width: 100%; margin-bottom: 1em; }
-    button { padding: 0.5em 1em; }
+    button { padding: 0.5em 1em; margin-right: 0.5em; }
     #response { white-space: pre-wrap; margin-top: 1em; background: #f0f0f0; padding: 1em; border-radius: 5px; }
   </style>
 </head>
@@ -92,7 +93,6 @@
       document.getElementById("response").innerText = "🧹 Cache cleared.";
     }
 
-    // Load from cache if available
     window.addEventListener("load", () => {
       const cachedChunks = localStorage.getItem("rag_chunks");
       const cachedEmbeddings = localStorage.getItem("rag_embeddings");
